@@ -1,0 +1,107 @@
+APM 应用性能管理(Application Performance Management) 工具 Pinpoint 初试
+
+部署 pinpoint 1.70 版本
+https://github.com/naver/pinpoint/blob/master/doc/installation.md
+
+下载软件
+mkdir -p /pp
+cd /pp
+ls -lh |awk '{print $9,$5}'
+apache-tomcat-8.0.48.tar.gz 9.0M
+hbase-1.2.6-bin.tar.gz 100M
+jre-8u152-linux-x64.tar.gz 77M
+pinpoint-collector-1.7.0.war 47M
+pinpoint-web-1.7.0.war 76M
+
+安装jre，配置环境
+tar zxvf jre-8u152-linux-x64.tar.gz
+vi /etc/profile
+export JAVA_HOME=/pp/jre1.8.0_152
+export PATH=$JAVA_HOME/bin:$PATH
+export CLASSPATH=.:$JAVA_HOME/lib:$JAVA_HOME/lib/tools.jar
+
+source /etc/profile
+java -version  
+# javac -version
+
+安装hbase，配置保存路径，启动，并初始化数据
+cd /pp
+tar zxvf hbase-1.2.6-bin.tar.gz
+mkdir -p /data/hbase
+vim /pp/hbase-1.2.6/conf/hbase-site.xml
+<configuration>
+  <property>
+    <name>hbase.rootdir</name>
+    <value>file:///data/hbase</value>
+  </property>
+</configuration>
+
+/pp/hbase-1.2.6/bin/start-hbase.sh
+
+wget https://raw.githubusercontent.com/naver/pinpoint/master/hbase/scripts/hbase-create.hbase
+/pp/hbase-1.2.6/bin/hbase shell hbase-create.hbase
+
+http://192.168.20.119:16010/master-status
+
+解压tomcat，部署pinpoint-collector
+cd /pp
+tar zxvf apache-tomcat-8.0.48.tar.gz
+cd /pp/apache-tomcat-8.0.48/conf
+cp server.xml server.xml.org
+sed -i 's/port="8005"/port="18005"/g' server.xml
+sed -i 's/port="8080"/port="18080"/g' server.xml
+sed -i 's/port="8443"/port="18443"/g' server.xml
+sed -i 's/port="8009"/port="18009"/g' server.xml
+sed -i 's/redirectPort="8443"/redirectPort="18443"/g' server.xml
+sed -i "s/localhost/192.168.20.119/g" server.xml
+diff server.xml server.xml.org
+rm /pp/apache-tomcat-8.0.48/webapps/* -rf
+mkdir -p /pp/apache-tomcat-8.0.48/webapps/ROOT
+cd /pp
+unzip pinpoint-collector-1.7.0.war -d /pp/apache-tomcat-8.0.48/webapps/ROOT
+启动并观察
+mv /pp/apache-tomcat-8.0.48 /pp/apache-tomcat-8.0.48-pc
+/pp/apache-tomcat-8.0.48-pc/bin/startup.sh
+
+
+
+
+解压tomcat，部署pinpoint-web
+cd /pp
+tar zxvf apache-tomcat-8.0.48.tar.gz
+cd /pp/apache-tomcat-8.0.48/conf
+cp server.xml server.xml.org
+sed -i 's/port="8005"/port="28005"/g' server.xml
+sed -i 's/port="8080"/port="28080"/g' server.xml
+sed -i 's/port="8443"/port="28443"/g' server.xml
+sed -i 's/port="8009"/port="28009"/g' server.xml
+sed -i 's/redirectPort="8443"/redirectPort="28443"/g' server.xml
+sed -i "s/localhost/192.168.20.119/g" server.xml
+diff server.xml server.xml.org 
+rm /pp/apache-tomcat-8.0.48/webapps/* -rf
+mkdir -p /pp/apache-tomcat-8.0.48/webapps/ROOT
+cd /pp
+unzip pinpoint-web-1.7.0.war -d /pp/apache-tomcat-8.0.48/webapps/ROOT
+启动并观察
+mv /pp/apache-tomcat-8.0.48 /pp/apache-tomcat-8.0.48-pw
+/pp/apache-tomcat-8.0.48-pw/bin/startup.sh
+
+http://192.168.20.119:28080
+
+
+
+
+停止服务
+/pp/apache-tomcat-8.0.48-pw/bin/shutdown.sh
+/pp/apache-tomcat-8.0.48-pc/bin/shutdown.sh
+/pp/hbase-1.2.6/bin/stop-hbase.sh
+ps -ef|grep -i java
+
+agent:
+wget https://github.com/naver/pinpoint/releases/download/1.7.0/pinpoint-agent-1.7.0.tar.gz
+
+问题:From 1.5.2 upgrade to 1.6.1 no trace data！ #2897
+https://github.com/naver/pinpoint/issues/2897
+处理:修改agent的pinpoint.config配置文件
+profiler.collector.ip=192.168.20.119
+profiler.tomcat.conditional.transform = false
